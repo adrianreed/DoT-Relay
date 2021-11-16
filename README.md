@@ -45,13 +45,12 @@ Workflow:
 7) Return the response from the public DNS resolver, back to the origina client. Data received will be manipulated *if required* (see step 3 of 'Details').
 
 Code details:
-The app lives within the dot-relay/ directory (from where it can be packaged via setup.py).
-1) The Dockerfile provides a default configuration of the environment and creates the app entrypoint.
-2) main.py gathers info, initiates the servers and the listening loop, and performs all the necessary calls to complete the workflow.
-3) 'sockethandlers' provides classes and methods to work with sockets and TLS wrapping. *All* socket creation and configuration is abstracted by these classes and methods. 
-As a standard: all these methods will return a socket object (or False if an error occurs). 
-4) 'util' provides a mix of utility classes and methods to gather and process different types of data. Because of the nature of the module there's no guidelines here, but docstrings should be enough to understand what's going on.
-5) setup.py can be used to package the code into a tarball with:
+1) The app lives within the dot-relay/ directory (from where it can be packaged via setup.py).
+2) The Dockerfile provides a default configuration of the environment and creates the app entrypoint.
+3) main.py gathers info, initiates the servers and the listening loop, and performs all the necessary calls to complete the workflow.
+4) 'sockethandlers' provides classes and methods to work with sockets and TLS wrapping. *All* socket creation and configuration is abstracted by these classes and methods. As a standard: all these methods will return a socket object (or False if an error occurs). 
+5) 'util' provides a mix of utility classes and methods to gather and process different types of data. Because of the nature of the module there's no guidelines here, but docstrings should be enough to understand what's going on.
+6) setup.py can be used to package the code into a tarball/zip with:
 ```
-$ python3 setup.py sdist 
+$ python3 setup.py sdist --formats=gztar,zip
 ```
