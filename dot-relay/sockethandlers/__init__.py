@@ -8,93 +8,190 @@ import ssl
 
 class SocketStarter:
     """
-    Class to initialize standard sockets with basic configuration.
+    Class to initialize and configure sockets.
     """
-    def __init__(self, ip, port):
-        self.ip = ip
-        self.port = port
+    def __init__(self):
         self.get_socket = socket.socket
 
-    def udp_base(self):
+    def _udp_socket(self):
         """
-        Return a standard UDP socket.
+        Return UDP socket.
         :return: (obj) or False
         """
         try:
             s = self.get_socket(socket.AF_INET, socket.SOCK_DGRAM)
         except Exception as e:
             logging.error(e)
-            print(e)
             return False
         return s
 
-    def udp_server(self):
+    def udp_client(self):
         """
-        Return a server UDP socket bound to the instance IP address and port.
+        Return UDP client.
         :return: (obj) or False
         """
-        s = self.udp_base()
-        try:
-            s.bind((self.ip, self.port))
-        except Exception as e:
-            logging.error(e)
-            print(e)
+        s = self._udp_socket()
+        if not s:
             return False
         return s
 
-    def tcp_base(self):
+    def udp_server(self, ip, port):
         """
-        Return a standard TCP socket.
+        Return UDP server, bound to an IP address and port.
+        :param ip: (str)
+        :param port: (int)
+        :return: (obj) or False
+        """
+        s = self._udp_socket()
+        if not s:
+            return False
+
+        try:
+            s.bind((ip, port))
+        except Exception as e:
+            logging.error(e)
+            return False
+        return s
+
+    def _tcp_socket(self):
+        """
+        Return TCP socket.
         :return: (obj) or False
         """
         try:
             s = self.get_socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(30)
         except Exception as e:
             logging.error(e)
-            print(e)
             return False
         return s
 
-    def tcp_server(self):
+    def tcp_client(self, timeout=None):
         """
-        Return a server TCP socket bound to the instance IP address and port.
-        This socket will be configured to be reusable when in TIME_WAIT state.
+        Return TCP client.
+        :param timeout: (int)
         :return: (obj) or False
         """
-        s = self.tcp_base()
-        try:
+        s = self._tcp_socket()
+        if not s:
+            return False
+        if timeout:
+            s.settimeout(timeout)
+        else:
+            s.settimeout(0)
+        return s
+
+    def tcp_server(self, ip, port, timeout=None, reuse=False):
+        """
+        Return TCP server, bound to an IP address and port.
+        Reusable when in TIME_WAIT state if reuse=True.
+        :param ip: (str)
+        :param port: (int)
+        :param timeout: (int)
+        :param reuse: (bool)
+        :return: (obj) or False
+        """
+        s = self._tcp_socket()
+        if not s:
+            return False
+
+        if reuse:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind((self.ip, self.port))
+        if timeout:
+            s.settimeout(timeout)
+        else:
+            s.settimeout(0)
+
+        try:
+            s.bind((ip, port))
             s.listen()
         except Exception as e:
             logging.error(e)
-            print(e)
             return False
         return s
 
 
-class SocketWrapper:
+class ContextStarter:
     """
-    Class to wrap standard TCP sockets in TLS.
+    Class to initialize and configure SSL contexts.
     """
-    def __init__(self, sock, ip, crt_file):
-        self.sock = sock
-        self.ip = ip
-        self.crt_file = crt_file
-
-    def wrap(self):
+    def __init__(self, ca_cert_file, server=False, verify=True):
         """
-        Use instance socket (TCP), IP and path to the SSL CA certs file to return a wrapped socket.
-        :return: (obj) or False
+        Initialize SSL context. By default it's a client side, and forces verification.
+        :param ca_cert_file: (str) CA Cert file location
+        :param server: (bool) Server or not
+        :param verify: (bool) Force verify
+        """
+        self.ca_cert_file = ca_cert_file
+        self.server = server
+        self.verify = verify
+        self.get_context = ssl.SSLContext
+
+        if self.server:
+            self.protocol = ssl.PROTOCOL_TLS_SERVER
+        else:
+            self.protocol = ssl.PROTOCOL_TLS_CLIENT
+
+        if self.verify:
+            self.mode = ssl.CERT_REQUIRED
+        else:
+            self.mode = ssl.CERT_OPTIONAL
+
+    def _setup_ssl_context(self):
+        """
+        Return configured SSL context.
+        :return: (obj)
         """
         try:
-            c = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            c.verify_mode = ssl.CERT_REQUIRED
-            c.load_verify_locations(self.crt_file)
-            w = c.wrap_socket(self.sock, server_hostname=self.ip)
+            c = self.get_context(self.protocol)
+            c.verify_mode = self.mode
+            c.load_verify_locations(cafile=self.ca_cert_file)
+        except Exception as e:
+            logging.error(e)
+            return False
+        return c
+
+    def wrap(self, sock, ip, hoc=True):
+        """
+        Wrap a TCP socket in SSL context.
+        :param sock: (ojb)
+        :param ip: (str)
+        :param hoc: (str) Do handshake on connect
+        :return: (obj)
+        """
+        c = self._setup_ssl_context()
+        if not c:
+            return False
+
+        try:
+            w = c.wrap_socket(sock, do_handshake_on_connect=hoc, server_hostname=ip)
         except Exception as e:
             logging.error(e)
             print(e)
             return False
         return w
+
+
+def ssl_client(certs, ip, timeout):
+    """
+    Return a SSL client.
+    :param certs: (str)
+    :param ip: (str)
+    :param timeout: (int)
+    :return: (obj)
+    """
+    s = SocketStarter().tcp_client(timeout=timeout)
+    if not s:
+        return False
+
+    c = ContextStarter(certs, verify=True)
+    if not c:
+        return False
+
+    w = c.wrap(s, ip)
+    if not w:
+        return False
+    return w
+
+
+def ssl_server():
+    pass
